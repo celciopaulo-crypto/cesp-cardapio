@@ -1,0 +1,32 @@
+# ============================================================
+# CESP Food — configuração do Cloudflare Worker
+# ------------------------------------------------------------
+# Um só Worker serve os ficheiros estáticos (index/admin/pos) e
+# a API /api/* (catálogo + pedidos) sobre KV.
+#
+# Antes do primeiro deploy (ver DEPLOY.md):
+#   1) Criar o namespace KV e colar o id em [[kv_namespaces]].id
+#   2) Definir o segredo:  npx wrangler secret put PUBLISH_TOKEN
+# ============================================================
+
+name = "cesp-cardapio"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Ficheiros estáticos servidos a partir da raiz do repositório.
+# O Worker corre para pedidos /api/* (não correspondem a ficheiro);
+# tudo o resto é servido diretamente como asset. .assetsignore
+# exclui ficheiros que não devem ir para o site.
+[assets]
+directory = "."
+binding = "ASSETS"
+not_found_handling = "404-page"
+
+# Armazenamento central partilhado. Substituir <KV_NAMESPACE_ID>
+# pelo id devolvido por:  npx wrangler kv namespace create CESP_KV
+[[kv_namespaces]]
+binding = "CESP_KV"
+id = "46ee2dadad9e44e3919d167b4deee9b2"
+
+# PUBLISH_TOKEN NÃO fica aqui (é segredo). Definir com:
+#   npx wrangler secret put PUBLISH_TOKEN
