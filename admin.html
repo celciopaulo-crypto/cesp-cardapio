@@ -1701,7 +1701,21 @@ function renderGestao(){
    isto só empurra o mesmo menu para o servidor. Se o servidor não
    responder (offline), avisa mas nada se perde. */
 var API_BASE = (function(){ try{ return new URL('api/', location.href).href; }catch(e){ return 'api/'; } })();
-var API_SEGREDO = 'cesp-local-dev-2026-namibe'; /* TEM de ser IGUAL ao segredo do config.php do servidor */
+/* Chave do servidor: guardada no dispositivo (localStorage), NUNCA
+   escrita no código público. Pede-se uma vez; o segredo real vive
+   como Worker secret (PUBLISH_TOKEN). Para trocar/limpar a chave:
+   localStorage.removeItem('cesp_publish_token') e recarregar. */
+function cespToken(){
+  var t=''; try{ t=(localStorage.getItem('cesp_publish_token')||'').trim(); }catch(e){}
+  if(!t){
+    try{
+      t=(prompt('Introduz a chave de publicação do servidor CESP (só a 1ª vez neste dispositivo):')||'').trim();
+      if(t) localStorage.setItem('cesp_publish_token', t);
+    }catch(e){}
+  }
+  return t;
+}
+var API_SEGREDO = cespToken();
 
 function publicarNoServidor(payloadStr){
   try{

@@ -1,0 +1,12 @@
+# Ficheiros que NÃO devem ser servidos como parte do site público.
+.git
+.gitignore
+node_modules
+worker.js
+wrangler.toml
+.assetsignore
+DEPLOY.md
+# Origens de design / imagens-fonte (não são referenciadas em runtime;
+# as imagens do cardápio vivem em Base64 dentro do cesp_data)
+Produtos Cesp
+*.svg

@@ -964,7 +964,21 @@ var sessao = null;
    balcão continuam offline; isto é um canal separado que só
    precisa de internet. */
 var API_BASE = (function(){ try{ return new URL('api/', location.href).href; }catch(e){ return 'api/'; } })();
-var API_SEGREDO = 'cesp-local-dev-2026-namibe'; /* TEM de ser IGUAL ao segredo do config.php */
+/* Chave do servidor: guardada no dispositivo (localStorage), NUNCA
+   escrita no código público. Pede-se uma vez; o segredo real vive
+   como Worker secret (PUBLISH_TOKEN). Para trocar/limpar a chave:
+   localStorage.removeItem('cesp_publish_token') e recarregar. */
+function cespToken(){
+  var t=''; try{ t=(localStorage.getItem('cesp_publish_token')||'').trim(); }catch(e){}
+  if(!t){
+    try{
+      t=(prompt('Introduz a chave do servidor CESP (só a 1ª vez neste dispositivo):')||'').trim();
+      if(t) localStorage.setItem('cesp_publish_token', t);
+    }catch(e){}
+  }
+  return t;
+}
+var API_SEGREDO = cespToken();
 var POLL_PEDIDOS_MS = 6000;
 var pedidosCache = [];
 var pedidosConhecidos = null;   /* Set de ids já vistos (null = 1ª leitura) */
@@ -997,6 +1011,30 @@ function loadData(){
   }catch(e){
     console.warn('Não foi possível ler cesp_data:', e);
   }
+}
+
+/* ── Catálogo central: ler o menu oficial do servidor ───────
+   Additivo: o loadData() local já pintou o grid (rápido, mesmo
+   offline). Isto vai buscar o menu partilhado ao Worker e, se
+   existir, atualiza, faz cache local e re-renderiza. Sem token
+   (o catálogo é público). Num dispositivo novo, é isto que
+   traz o menu — o POS deixa de depender do localStorage local. */
+function carregarCatalogoDoServidor(){
+  try{
+    fetch(API_BASE + 'catalogo.php', { cache:'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(res){
+        if(!res || !res.ok || !res.catalogo) return;   /* sem menu no servidor: fica o local */
+        var p = res.catalogo;
+        DATA.store      = p.store      || DATA.store;
+        DATA.categories = (p.categories && p.categories.length) ? p.categories : DATA.categories;
+        DATA.products   = (p.products   && p.products.length)   ? p.products   : DATA.products;
+        DATA.combos     = p.combos      || DATA.combos;
+        try{ localStorage.setItem(KEY_DATA, JSON.stringify(p)); }catch(e){}  /* cache offline */
+        try{ applyBrand(); renderCats(); renderGrid(); }catch(e){}
+      })
+      .catch(function(){ /* offline: mantém o menu local */ });
+  }catch(e){}
 }
 
 /* ── Cabeçalho (marca) ───────────────────────────────────── */
@@ -3432,6 +3470,7 @@ function init(){
   renderCats();
   renderGrid();
   renderCart();
+  carregarCatalogoDoServidor();   /* catálogo central: buscar o menu partilhado ao Worker */
   tick(); setInterval(tick, 10000);
 
   /* Aparência/catálogo mudados no admin (outra janela) → aplicar ao vivo */
