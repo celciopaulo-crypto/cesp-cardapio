@@ -26,7 +26,7 @@ not_found_handling = "404-page"
 # pelo id devolvido por:  npx wrangler kv namespace create CESP_KV
 [[kv_namespaces]]
 binding = "CESP_KV"
-id = "<KV_NAMESPACE_ID>"
+id = "46ee2dadad9e44e3919d167b4deee9b2"
 
 # PUBLISH_TOKEN NÃO fica aqui (é segredo). Definir com:
 #   npx wrangler secret put PUBLISH_TOKEN
