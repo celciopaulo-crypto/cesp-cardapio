@@ -1019,12 +1019,17 @@ function loadData(){
    existir, atualiza, faz cache local e re-renderiza. Sem token
    (o catálogo é público). Num dispositivo novo, é isto que
    traz o menu — o POS deixa de depender do localStorage local. */
-function carregarCatalogoDoServidor(){
+var lastCatalogoTs = '';
+function carregarCatalogoDoServidor(periodico){
   try{
     fetch(API_BASE + 'catalogo.php', { cache:'no-store' })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(res){
         if(!res || !res.ok || !res.catalogo) return;   /* sem menu no servidor: fica o local */
+        /* Auto-atualização: se nada mudou no servidor, não re-renderiza
+           (não interrompe o operador a meio de um pedido). */
+        if(periodico && res.ts && res.ts === lastCatalogoTs) return;
+        lastCatalogoTs = res.ts || lastCatalogoTs;
         var p = res.catalogo;
         DATA.store      = p.store      || DATA.store;
         DATA.categories = (p.categories && p.categories.length) ? p.categories : DATA.categories;
@@ -3471,6 +3476,12 @@ function init(){
   renderGrid();
   renderCart();
   carregarCatalogoDoServidor();   /* catálogo central: buscar o menu partilhado ao Worker */
+  /* Auto-atualização do menu no POS: verifica o servidor a cada 30s e ao
+     voltar ao ecrã, re-renderizando só quando o menu mudou. */
+  setInterval(function(){ carregarCatalogoDoServidor(true); }, 30000);
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) carregarCatalogoDoServidor(true);
+  });
   tick(); setInterval(tick, 10000);
 
   /* Aparência/catálogo mudados no admin (outra janela) → aplicar ao vivo */
