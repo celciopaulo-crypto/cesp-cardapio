@@ -1715,9 +1715,19 @@ function cespToken(){
   }
   return t;
 }
+/* Chave errada: esquece a guardada e pede uma nova. */
+function redefinirToken(){
+  try{ localStorage.removeItem('cesp_publish_token'); }catch(e){}
+  var t=''; try{
+    t=(prompt('A chave do servidor está incorreta. Escreve-a de novo (tem de ser IGUAL ao PUBLISH_TOKEN da Cloudflare):')||'').trim();
+    if(t) localStorage.setItem('cesp_publish_token', t);
+  }catch(e){}
+  API_SEGREDO = t;
+  return t;
+}
 var API_SEGREDO = cespToken();
 
-function publicarNoServidor(payloadStr){
+function publicarNoServidor(payloadStr, jaTentou){
   try{
     fetch(API_BASE + 'publicar.php', {
       method:'POST',
@@ -1726,8 +1736,18 @@ function publicarNoServidor(payloadStr){
     })
     .then(function(r){ return r.json().catch(function(){ return {}; }); })
     .then(function(res){
-      if(res && res.ok){ toast('Menu publicado no servidor ✔','ok'); }
-      else { toast('Guardado no PC. Servidor: '+((res&&res.erro)||'sem resposta'),'err'); }
+      if(res && res.ok){ toast('Menu publicado no servidor ✔','ok'); return; }
+      /* Chave errada: pedir de novo e tentar uma vez mais automaticamente */
+      if(res && res.erro==='nao_autorizado' && !jaTentou){
+        toast('Chave incorreta — vou pedir a chave de novo.','err');
+        if(redefinirToken()){ publicarNoServidor(payloadStr, true); }
+        return;
+      }
+      if(res && res.erro==='nao_autorizado'){
+        toast('A chave continua incorreta. Confirma o PUBLISH_TOKEN na Cloudflare.','err');
+        return;
+      }
+      toast('Guardado no PC. Servidor: '+((res&&res.erro)||'sem resposta'),'err');
     })
     .catch(function(){ toast('Guardado no PC (servidor offline).','err'); });
   }catch(e){}
