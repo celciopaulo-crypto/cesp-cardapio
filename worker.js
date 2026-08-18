@@ -249,16 +249,6 @@ async function handleApi(request, env, url) {
   const path = url.pathname;
   const m = request.method;
 
-  if (path.endsWith('/_diag') && m === 'GET') {
-    const esperado = await tokenEsperado(env);
-    return json({
-      ok: true,
-      temSecret: !!(env.PUBLISH_TOKEN && String(env.PUBLISH_TOKEN).trim()),
-      temKvToken: !!(await env.CESP_KV.get('config:publish_token')),
-      tokenLen: esperado.length,   /* só o comprimento, nunca o valor */
-      temKV: !!env.CESP_KV
-    });
-  }
   if (path.endsWith('/catalogo.php') && m === 'GET') return getCatalogo(env);
   if (path.endsWith('/publicar.php') && m === 'POST') return publicar(request, env);
   if (path.endsWith('/pedido.php') && m === 'POST') return criarPedido(request, env);
