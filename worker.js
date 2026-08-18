@@ -39,9 +39,24 @@ function agoraWAT() {
   return d.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-function autorizado(request, env) {
-  const t = request.headers.get('X-CESP-Token') || '';
-  return env.PUBLISH_TOKEN && t && t === env.PUBLISH_TOKEN;
+/* Token esperado: primeiro o Worker secret (PUBLISH_TOKEN); se não
+   existir, uma chave guardada no próprio KV (config:publish_token).
+   O fallback por KV é fiável e editável à mão no painel da Cloudflare
+   (página "Pares de KV"), sem depender dos segredos do Worker. */
+async function tokenEsperado(env) {
+  const s = (env.PUBLISH_TOKEN || '').trim();
+  if (s) return s;
+  try {
+    const k = await env.CESP_KV.get('config:publish_token');
+    if (k) return k.trim();
+  } catch (e) {}
+  return '';
+}
+
+async function autorizado(request, env) {
+  const esperado = await tokenEsperado(env);
+  const t = (request.headers.get('X-CESP-Token') || '').trim();
+  return !!esperado && t === esperado;
 }
 
 /* ── Catálogo ───────────────────────────────────────────── */
@@ -55,7 +70,7 @@ async function getCatalogo(env) {
 }
 
 async function publicar(request, env) {
-  if (!autorizado(request, env)) return json({ ok: false, erro: 'nao_autorizado' }, 401);
+  if (!(await autorizado(request, env))) return json({ ok: false, erro: 'nao_autorizado' }, 401);
   let payload;
   try { payload = await request.text(); } catch (e) { return json({ ok: false, erro: 'corpo_invalido' }, 400); }
   try { JSON.parse(payload); } catch (e) { return json({ ok: false, erro: 'json_invalido' }, 400); }
@@ -107,7 +122,7 @@ async function criarPedido(request, env) {
 }
 
 async function listarPedidos(request, env, url) {
-  if (!autorizado(request, env)) return json({ ok: false, erro: 'nao_autorizado' }, 401);
+  if (!(await autorizado(request, env))) return json({ ok: false, erro: 'nao_autorizado' }, 401);
 
   const desde = url.searchParams.get('desde');           // 'YYYY-MM-DD'
   const historico = url.searchParams.get('historico');   // '1'
@@ -143,7 +158,7 @@ async function listarPedidos(request, env, url) {
 }
 
 async function mudarEstado(request, env) {
-  if (!autorizado(request, env)) return json({ ok: false, erro: 'nao_autorizado' }, 401);
+  if (!(await autorizado(request, env))) return json({ ok: false, erro: 'nao_autorizado' }, 401);
   let body; try { body = await request.json(); } catch (e) { return json({ ok: false, erro: 'json_invalido' }, 400); }
   if (!body || !body.id || !body.estado) return json({ ok: false, erro: 'parametros' }, 400);
 
@@ -158,7 +173,7 @@ async function mudarEstado(request, env) {
 }
 
 async function mudarPagamento(request, env) {
-  if (!autorizado(request, env)) return json({ ok: false, erro: 'nao_autorizado' }, 401);
+  if (!(await autorizado(request, env))) return json({ ok: false, erro: 'nao_autorizado' }, 401);
   let body; try { body = await request.json(); } catch (e) { return json({ ok: false, erro: 'json_invalido' }, 400); }
   if (!body || !body.id || !body.estado) return json({ ok: false, erro: 'parametros' }, 400);
 
@@ -173,7 +188,7 @@ async function mudarPagamento(request, env) {
 }
 
 async function verComprovativo(request, env, url) {
-  if (!autorizado(request, env)) return json({ ok: false, erro: 'nao_autorizado' }, 401);
+  if (!(await autorizado(request, env))) return json({ ok: false, erro: 'nao_autorizado' }, 401);
   const id = url.searchParams.get('id');
   if (!id) return json({ ok: false, erro: 'sem_id' }, 400);
   const raw = await env.CESP_KV.get('pedido:' + id);
@@ -184,7 +199,7 @@ async function verComprovativo(request, env, url) {
 }
 
 async function estatisticas(request, env) {
-  if (!autorizado(request, env)) return json({ ok: false, erro: 'nao_autorizado' }, 401);
+  if (!(await autorizado(request, env))) return json({ ok: false, erro: 'nao_autorizado' }, 401);
 
   const lista = await env.CESP_KV.list({ prefix: 'pedido:' });
   const map = {};
@@ -234,6 +249,16 @@ async function handleApi(request, env, url) {
   const path = url.pathname;
   const m = request.method;
 
+  if (path.endsWith('/_diag') && m === 'GET') {
+    const esperado = await tokenEsperado(env);
+    return json({
+      ok: true,
+      temSecret: !!(env.PUBLISH_TOKEN && String(env.PUBLISH_TOKEN).trim()),
+      temKvToken: !!(await env.CESP_KV.get('config:publish_token')),
+      tokenLen: esperado.length,   /* só o comprimento, nunca o valor */
+      temKV: !!env.CESP_KV
+    });
+  }
   if (path.endsWith('/catalogo.php') && m === 'GET') return getCatalogo(env);
   if (path.endsWith('/publicar.php') && m === 'POST') return publicar(request, env);
   if (path.endsWith('/pedido.php') && m === 'POST') return criarPedido(request, env);
