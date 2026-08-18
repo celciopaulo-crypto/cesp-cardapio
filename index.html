@@ -904,12 +904,17 @@ function loadData() {
    existir, atualiza e guarda em cache local para a próxima. */
 var API_BASE = (function(){ try{ return new URL('api/', location.href).href; }catch(e){ return 'api/'; } })();
 
-function carregarDoServidor() {
+var lastServerTs = '';
+function carregarDoServidor(periodico) {
   try {
     fetch(API_BASE + 'catalogo.php', { cache: 'no-store' })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(res){
         if(!res || !res.ok || !res.catalogo) return;   /* sem menu no servidor: fica o local */
+        /* Auto-atualização: se nada mudou no servidor desde a última vez,
+           não re-renderiza (evita saltos no ecrã enquanto o cliente navega). */
+        if (periodico && res.ts && res.ts === lastServerTs) return;
+        lastServerTs = res.ts || lastServerTs;
         var p = res.catalogo;
         if (p.store)                             DATA.store       = p.store;
         if (p.categories && p.categories.length) DATA.categories  = p.categories;
@@ -921,6 +926,7 @@ function carregarDoServidor() {
         try { localStorage.setItem(KEYS.DATA, JSON.stringify(p)); } catch(e){}  /* cache offline */
         if (cupomAplicado) revalidarCupom();   /* menu mudou: reconfirmar o cupão */
         applyBrand(); renderPromos(); renderCombos(); renderCats(); renderMenu();
+        if (periodico) { try { showSyncBanner(); } catch(e){} }  /* avisar que o menu atualizou */
       })
       .catch(function(){ /* offline: mantém o menu local */ });
   } catch(e){}
@@ -2165,6 +2171,12 @@ renderCats();
 renderMenu();
 updateCart();
 carregarDoServidor();   /* loja online: buscar o menu oficial ao servidor */
+/* Auto-atualização do menu: verifica o servidor a cada 30s e quando o
+   cliente volta ao separador (típico no telemóvel), sem recarregar à mão. */
+setInterval(function(){ carregarDoServidor(true); }, 30000);
+document.addEventListener('visibilitychange', function(){
+  if (!document.hidden) carregarDoServidor(true);
+});
 
 /* bind estáticos */
 g('cartBtn').addEventListener('click', openDrawer);
